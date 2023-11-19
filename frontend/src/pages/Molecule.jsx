@@ -46,7 +46,10 @@ async function dimensionality(molecule_id, type, components, signal, limit=10) {
       if (!response.ok) {
          throw new Error('Invalid Molecule Id')
       }
-   
+      else if (response.status == 204) {
+         // Return an empty array because there is no PCA or UMAP data.
+         return [];
+      }
       else {
          return await response.json()
       }
@@ -169,7 +172,9 @@ export default function MoleculeInfo() {
 
    return (
       <Container maxWidth="xl">
-         <Grid container alignItems="center" justifyContent="center" spacing={2}>
+         
+         { Object.keys(molData).length > 0 ?
+            <Grid container alignItems="center" justifyContent="center" spacing={2}>
             <Grid item xs={(width > 1366) ? 6 : 12} sx={{mt: 3}}>
             {Object.keys(svg).length > 0 && 
                <Box 
@@ -196,7 +201,7 @@ export default function MoleculeInfo() {
             <Grid item xs={(width > 1366) ? 6 : 12}>
                {Object.keys(molData).length > 0 && <MoleculeDataTable molecule_id={molData.molecule_id} initial_data_type="ml" />}
             </Grid>
-            {(width > 768) && allConformers.length > 0 && conformer.length > 0 && <Grid item xs={(width > 1366) ? 6 : 12}>
+            {(width > 768) && allConformers.length > 0 && conformer.length > 0 && <Grid item xs={(width > 1366) && Object.keys(neighborData).length > 0 ? 6 : 12}>
                <Container>
                   <FormControl fullWidth variant="standard">
                      <InputLabel id="conformer">{allConformers.length} Conformers</InputLabel>
@@ -220,8 +225,8 @@ export default function MoleculeInfo() {
                   </Box>
                </Container>
             </Grid>}
-            {(width > 768) && <Grid item xs={(width > 1366) && allConformers.length > 0 && conformer.length > 0 ? 6 : 12}>
-               {Object.keys(neighborData).length > 0 ? 
+            {(width > 768) && Object.keys(neighborData).length > 0 && <Grid item xs={(width > 1366) && allConformers.length > 0 && conformer.length > 0 ? 6 : 12}>
+               {Object.keys(neighborData).length > 0 &&
                <Box display="flex" flexDirection="column" justifyContent="center" alignItems="center">
                   <TextField
                   select
@@ -237,16 +242,13 @@ export default function MoleculeInfo() {
                      <Graph molData={neighborData} componentArray={components} type={type} neighborSearch={true}></Graph>
                   </Container>
                </Box>
-               :
-               <Box display="flex" flexDirection="column" justifyContent="center" alignItems="center">
-                  <CircularProgress />
-               </Box>
                }
             </Grid>
             }
-            {Object.keys(molData).length > 0 && (width > 768) && <Grid item xs={12}>
-            </Grid>}
-         </Grid>
+         </Grid> :
+         <Box display="flex" flexDirection="column" justifyContent="center" alignItems="center">
+            <CircularProgress />
+         </Box>}
       </Container>
    )
 }

@@ -424,8 +424,13 @@ def search_neighbors(
         raise HTTPException(
             status_code=400, detail="No molecule with the id provided was found!"
         )
-
-    return results
+    # If a molecule does not have UMAP or PCA data, the results returned will just be molecules from id 1 to the limit.
+    # The easiest way to check if the molecule has PCA or UMAP data is to see if the first molecule returned is the same as the one requested since the distance should be 0.
+    if (results[0][1] == molecule_id):
+        return results
+    else:
+        # Return a 204 since the query executed but there is no real UMAP or PCA data.
+        return Response(status_code=204)
 
 
 @router.get("/dimensions/", response_model=List[schemas.MoleculeComponents])
