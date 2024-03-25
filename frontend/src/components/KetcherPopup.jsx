@@ -3,6 +3,11 @@ import React, { useState } from 'react';
 import Button from '@mui/material/Button';
 import Dialog from '@mui/material/Dialog';
 import Slide from '@mui/material/Slide';
+import CloseIcon from '@mui/icons-material/Close';
+import IconButton from '@mui/material/IconButton';
+import AppBar from '@mui/material/AppBar';
+import Toolbar from '@mui/material/Toolbar';
+import Typography from '@mui/material/Typography';
 
 //import { convertStructToString } from 'ketcher-core'
 import { ChemicalMimeType } from 'ketcher-core';
@@ -41,13 +46,26 @@ export default function FullScreenDialog({ ketcherCallBack }) {
         </span>
         </Button>
       <Dialog
-        fullWidth={true}
+        //fullWidth={true}
+        fullScreen
         maxWidth={"lg"}
         open={open}
         onClose={handleClose}
         keepMounted
         TransitionComponent={Transition}
       >
+         <AppBar sx={{ position: 'relative' }}>
+          <Toolbar>
+            <IconButton
+              edge="start"
+              color="inherit"
+              onClick={handleClose}
+              aria-label="close"
+            >
+              <CloseIcon />
+            </IconButton>
+          </Toolbar>
+        </AppBar>
           <Editor
               staticResourcesUrl={process.env.PUBLIC_URL}
               structServiceProvider={structServiceProvider}

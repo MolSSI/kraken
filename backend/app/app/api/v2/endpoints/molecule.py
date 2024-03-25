@@ -50,22 +50,6 @@ def _pandas_to_buffer(df):
 
     return buffer
 
-def _valid_molecule_id(molecule_id, db):
-
-    # Generalized - get max molecule id.
-    query = text(f"SELECT MAX(molecule_id) FROM molecule;")
-    max_molecule_id = db.execute(query).fetchall()[0][0]
-
-    # Check to see if the molecule_id is within range.
-    if molecule_id > max_molecule_id:
-        raise HTTPException(status_code=404, detail=f"Molecule with ID supplied not found, the maximum ID is {max_molecule_id}")
-    
-    # Check to see if the molecule_id is within range.
-    if molecule_id <= 0:
-        raise HTTPException(status_code=500)
-
-    return 
-
 def valid_smiles(smiles):
     """Check to see if a smile string is valid to represent a molecule.
 
@@ -100,8 +84,41 @@ def valid_smiles(smiles):
 
     return smiles
 
-@router.get("/data/{molecule_id}", response_model=List[schemas.MoleculeData])
-async def get_molecule_data(molecule_id: int,
+@router.get("/first_id", response_model=Any)
+async def get_first_molecule_id(db: Session = Depends(deps.get_db)):
+    query = text("SELECT molecule_id FROM molecule ORDER BY molecule_id LIMIT 1;")
+    result = db.execute(query).fetchone()
+    return {"first_molecule_id": result[0]}
+
+@router.get("/data_types", response_model=Any)
+async def get_data_types(db: Session = Depends(deps.get_db)):
+    query = text("SELECT table_name FROM information_schema.tables WHERE table_schema = 'public';")
+    results = db.execute(query).fetchall()
+    return {"available_types": [x[0] for x in results if "data" in x[0]] }
+
+
+@router.get("/{molecule_id}/data_types", response_model=Any)
+async def get_molecule_data_types(molecule_id: int | str, db: Session = Depends(deps.get_db)):
+    # First, fetch all table names that have 'data' in their name
+    query_tables = text("SELECT table_name FROM information_schema.tables WHERE table_schema = 'public' AND table_name LIKE '%data%';")
+    tables = db.execute(query_tables).fetchall()
+
+    # Prepare a dictionary to store the results
+    results = {}
+
+    # Loop through each table to check for the molecule_id
+    for table in tables:
+        table_name = table[0]
+        # Assuming the column storing molecule IDs is named 'molecule_id' in all tables.
+        # You might need to adjust this according to your database schema.
+        query_check = text(f"SELECT EXISTS(SELECT 1 FROM {table_name} WHERE molecule_id = :molecule_id) AS exists;")
+        exists = db.execute(query_check, {"molecule_id": molecule_id}).fetchone()[0]
+        results[table_name] = exists
+
+    return results
+
+@router.get("/data/{molecule_id}", response_model=Any)
+async def get_molecule_data(molecule_id: int | str,
                             data_type: str="ml",
                             db: Session = Depends(deps.get_db)):
     
@@ -120,8 +137,12 @@ async def get_molecule_data(molecule_id: int,
     stmt = query.bindparams(molecule_id=molecule_id)
 
     results = db.execute(stmt).fetchall()
+
+    # Hacky way to get each row as a dictionary.
+    # do this to generalize for different data sets - column names may vary.
+    list_of_dicts = [row._asdict() for row in results]
     
-    return results
+    return list_of_dicts
 
 @router.get("/data/export/batch")
 async def get_molecules_data(molecule_ids: str,
@@ -130,23 +151,14 @@ async def get_molecules_data(molecule_ids: str,
                        context: Optional[str]=None,
                        db: Session = Depends(deps.get_db)):
     
-    
-    # Sanitize molecule ids
-    int_check = [x.strip().isdigit() for x in molecule_ids.split(",")]
 
-    if not all(int_check):
-        raise HTTPException(status_code=400, detail="Invalid molecule ids.")
-    
-    molecule_ids_list = [int(x) for x in molecule_ids.split(",")]
+    molecule_ids_list = [ x.strip() for x in molecule_ids.split(",")]
     first_molecule_id = molecule_ids_list[0]
     num_molecules = len(molecule_ids_list)
 
     if context:
         if context.lower() not in ["substructure", "pca_neighbors", "umap_neighbors"]:
             raise HTTPException(status_code=400, detail="Invalid context.")
-
-    # Check to see if all molecule ids are valid.
-    [ _valid_molecule_id(int(x), db) for x in molecule_ids.split(",") ]
 
     # Check for valid data type.
     if data_type.lower() not in ["ml", "dft", "xtb", "xtb_ni"]:
@@ -158,14 +170,18 @@ async def get_molecules_data(molecule_ids: str,
     # Use pandas.read_sql_query to get the data.
     table_name = f"{data_type}_data"
 
+    # Generating a safe query with placeholders
+    placeholders = ', '.join([':id' + str(i) for i in range(len(molecule_ids_list))])
+    query_parameters = {'id' + str(i): mid for i, mid in enumerate(molecule_ids_list)}
+
     query = text(f"""
         SELECT t.*, m.SMILES
         FROM {table_name} t
         JOIN molecule m ON t.molecule_id = m.molecule_id
-        WHERE t.molecule_id IN ({molecule_ids})
+        WHERE t.molecule_id IN ({placeholders})
     """)
 
-    df = pd.read_sql_query(query, db.bind)
+    df = pd.read_sql_query(query, db.bind, params=query_parameters)
 
     df_wide = _pandas_long_to_wide(df)      
 
@@ -186,12 +202,10 @@ async def get_molecules_data(molecule_ids: str,
         return response
 
 @router.get("/data/export/{molecule_id}")
-async def export_molecule_data(molecule_id: int,
+async def export_molecule_data(molecule_id: int | str,
                       data_type: str="ml",
                       db: Session = Depends(deps.get_db)):
 
-    # Check to see if the molecule_id is valid.
-    _valid_molecule_id(molecule_id, db)
     
     # Check for valid data type.
     if data_type.lower() not in ["ml", "dft", "xtb", "xtb_ni"]:
@@ -274,9 +288,8 @@ def get_molecule_umap(
 
 
 @router.get("/{molecule_id}", response_model=schemas.Molecule)
-def get_a_single_molecule(molecule_id: int, db: Session = Depends(deps.get_db)):
+def get_a_single_molecule(molecule_id: int | str, db: Session = Depends(deps.get_db)):
 
-    _valid_molecule_id(molecule_id, db)
 
     molecule = (
         db.query(models.molecule)
@@ -284,15 +297,29 @@ def get_a_single_molecule(molecule_id: int, db: Session = Depends(deps.get_db)):
         .one()
     )
 
+    if not molecule:
+        raise HTTPException(status_code=404, detail="Molecule not found")
+
+    # Attempt to fetch conformers associated with this molecule from the conformer view
+    try:
+        conformers = molecule.conformer_collection
+    except:
+        sql = text("SELECT * FROM conformer WHERE molecule_id = :molecule_id")
+        stmt = sql.bindparams(molecule_id=molecule_id)
+        conformers = db.execute(stmt).fetchall()
+
+    # for databases where there are no compound names, set the compound name to None
+    try: 
+        molecule.compound_name
+    except AttributeError:
+        molecule.compound_name = None
+
     response = schemas.Molecule(
         molecule_id=molecule.molecule_id,
         smiles=molecule.smiles,
         molecular_weight=molecule.molecular_weight,
-        conformers_id=[c.conformer_id for c in molecule.conformer_collection],
-        dft_data=molecule.dft_data,
-        xtb_data=molecule.xtb_data,
-        xtb_ni_data=molecule.xtb_ni_data,
-        ml_data=molecule.ml_data,
+        compound_name=molecule.compound_name,
+        conformers_id=[c.conformer_id for c in conformers],
     )
     return response
 
@@ -335,7 +362,7 @@ def search_molecules(
 
 @router.get("/{molecule_id}/neighbors/", response_model=List[schemas.MoleculeNeighbors])
 def search_neighbors(
-    molecule_id: int,
+    molecule_id: int | str,
     type: str = "pca",
     components: Optional[str] = None,
     skip: int = 1,
@@ -344,8 +371,6 @@ def search_neighbors(
 ):
 
     type = type.lower()
-
-    _valid_molecule_id(molecule_id, db)
     
     # Check for valid neighbor type.
     if type not in ["pca", "umap"]:
@@ -353,7 +378,7 @@ def search_neighbors(
 
     # Set defaults for components
     if type == "pca" and components is None:
-        components = "1,2,3,4"
+        components = "1,2,3"
 
     # Set defaults for components
     if type == "umap" and components is None:
@@ -462,7 +487,7 @@ def get_molecule_dimensions(
 
     # Set defaults for components
     if type == "pca" and components is None:
-        components = "1,2,3,4"
+        components = "1,2,3"
 
     # Set defaults for components
     if type == "umap" and components is None:

@@ -1,17 +1,14 @@
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Any
 
 from pydantic import BaseModel
 
 
 class Molecule(BaseModel):
-    molecule_id: int
+    molecule_id: int | str
     smiles: str
     molecular_weight: Optional[float] = None
-    conformers_id: List[Optional[int]]
-    dft_data: Optional[Dict] = None
-    xtb_data: Optional[Dict] = None
-    xtb_ni_data: Optional[Dict] = None
-    ml_data: Optional[Dict] = None
+    conformers_id: List[Optional[int | str]]
+    compound_name: Optional[str] = None
 
 class MoleculeData(BaseModel):
     property: str
@@ -23,7 +20,7 @@ class MoleculeData(BaseModel):
     vburminconf: Optional[float] = None
 
 class MoleculeSimple(BaseModel):
-    molecule_id: int
+    molecule_id: int | str
     umap1: Optional[float] = None
     umap2: Optional[float] = None
     pat: Optional[str] = None
@@ -31,7 +28,7 @@ class MoleculeSimple(BaseModel):
 
 class MoleculeComponents(BaseModel):
     type: Optional[str] = None
-    molecule_id: int
+    molecule_id: int | str
     pat: Optional[str] = None
     smiles: str
     components: Optional[list[float]] = None

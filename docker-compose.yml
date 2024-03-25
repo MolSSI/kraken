@@ -1,110 +1,107 @@
 version: '3'
 
 services:
-  reverse-proxy:
-    image: traefik:v2.9
-    container_name: reverse_proxy
-    command:
-      - --api.insecure=false
+  local_reverse-proxy:
+    # The official v2 Traefik docker image
+    image: traefik:v2.8
+    # Enables the web UI and tells Traefik to listen to docker
+    container_name: local_reverse_proxy
+    command: 
+      - --api.insecure=true 
+      - --api.dashboard=true
+      - --api.debug=true
       - --providers.docker
-      - --providers.docker.exposedByDefault=false
       - --entrypoints.web.address=:80
-
-      # Uncomment below for SSL
-      - --entrypoints.web.http.redirections.entrypoint.to=websecure
-      - --entrypoints.web.http.redirections.entrypoint.scheme=https
-      - --entrypoints.websecure.address=:443
-      - --entrypoints.websecure.http.tls=true
-      - --certificatesresolvers.le.acme.email=janash@vt.edu
-      - --certificatesresolvers.le.acme.httpchallenge.entrypoint=web
-      - --certificatesResolvers.le.acme.storage=/acme/acme.json
     ports:
+      # The HTTP port
       - "80:80"
-      - "443:443"
+      # The Web UI (enabled by --api.insecure=true)
+      - "8080:8080"
     volumes:
+      # So that Traefik can listen to the Docker events
       - /var/run/docker.sock:/var/run/docker.sock
-      - ./acme:/acme
     networks:
-      - web
-      - db
+      - local-web
+      - local-db
     labels:
       - "traefik.enable=true"
       - "traefik.http.routers.api.service=api@internal"
 
-
-  database:
-    image: 'mcs07/postgres-rdkit'
-    container_name: database
+  descriptor_database:
+    image: 'rdkit-postgres:latest'
+    container_name: descriptor_database
     shm_size: '4gb'
-    ports:
-      - "127.0.0.1:5432:5432"
-    volumes:
-      - "kraken-postgres:/var/lib/postgresql/data"
-      - "pr3:/home/db"
     environment:
-      POSTGRES_HOST_AUTH_METHOD: trust
-      POSTGRES_DB: postgres
+      POSTGRES_SERVER: database
+      POSTGRES_USER: postgres
+    ports:
+      - "5432:5432"
+    volumes:
+      - "postgres16:/var/lib/postgresql/data"
+    healthcheck:
+      test: ["CMD-SHELL", "psql -U postgres -d kraken_data -c 'SELECT molecule_id FROM molecule LIMIT 1;' || exit 1"]
+      interval: 5s
+      timeout: 2s
+      retries: 5
     networks:
-      - db
+      - local-db
 
-  backend:
-    image: 'phosphines-backend:latest'
-    container_name: backend
-    depends_on:
-      - database
+  descriptor_backend:
+    image: 'descriptor-backend:latest'
+    container_name: kraken_backend
     build:
       context: ./backend
       dockerfile: backend.dockerfile
     volumes:
       - "./backend/app:/app"
     environment:
-      POSTGRES_SERVER: database
+      POSTGRES_SERVER: descriptor_database
       POSTGRES_USER: postgres
-      POSTGRES_PASSWD: $postgresPWD
-      POSTGRES_DB: postgres
+      POSTGRES_DB: kraken_data
+      API_PREFIX: kraken
     entrypoint: bash prestart.sh
+    depends_on:
+      descriptor_database:
+        condition: service_healthy
     networks:
-      - web
-      - db
+      - local-web
+      - local-db
     labels:
       - "traefik.enable=true"
-      - "traefik.http.routers.backend.rule=Host(`kraken.molssi.org`) && PathPrefix(`/api`)"
-      - "traefik.http.services.backend.loadbalancer.server.port=8080"
-      - "traefik.http.routers.backend.tls=true"
-      - "traefik.http.routers.backend.tls.certresolver=le"
+      - "traefik.http.routers.kraken_backend.rule=Host(`localhost`) && PathPrefix(`/api/kraken`)"
+      - "traefik.http.services.kraken_backend.loadbalancer.server.port=8080"
 
-  cdk-depict:
+  local_cdk-depict:
     image: 'simolecule/cdkdepict:latest'
-    container_name: cdk_depict
+    container_name: local_cdk-depcit
     networks:
-      - web
+      - local-web
     labels:
       - "traefik.enable=true"
-      - "traefik.http.routers.cdk-depict.rule=Host(`kraken.molssi.org`) && PathPrefix(`/depict`)"
-      - "traefik.http.routers.cdk-depict.tls=true"
-      - "traefik.http.routers.cdk-depict.tls.certresolver=le"
+      - "traefik.http.routers.cdk-depict.rule=Host(`localhost`) && PathPrefix(`/depict`)"
 
-  frontend:
-    image: 'phosphines-frontend:latest'
-    container_name: frontend
+  descriptor_frontend:
+    image: 'descriptor-frontend:latest'
+    container_name: kraken_frontend
     volumes:
       - "./frontend/src:/app/src"
+      - "./frontend/public:/app/public"
+    environment:
+      - VITE_BASE_URL=/descriptor
     build:
       context: .
-      dockerfile: frontend.production.dockerfile
+      dockerfile: frontend.development.dockerfile
     networks:
-      - web
-    entrypoint: npm run serve
+      - local-web
+    entrypoint: npm run start
     labels:
       - "traefik.enable=true"
-      - "traefik.http.routers.frontend.rule=Host(`kraken.molssi.org`)"
+      - "traefik.http.routers.frontend.rule=Host(`localhost`) && PathPrefix(`/descriptor`)"
       - "traefik.http.services.frontend.loadbalancer.server.port=3000"
-      - "traefik.http.routers.frontend.tls=true"
-      - "traefik.http.routers.frontend.tls.certresolver=le"
 
-  documentation:
+  local_documentation:
     image: "phosphines-docs:latest"
-    container_name: documentation
+    container_name: local_documentation
     build:
       context: ./docs
       dockerfile: docs.dockerfile
@@ -112,20 +109,18 @@ services:
     volumes:
       - "./docs:/docs"
     networks:
-      - web
+      - local-web
     labels:
       - "traefik.enable=true"
-      - "traefik.http.routers.documentation.rule=Host(`kraken.molssi.org`) && PathPrefix(`/docs`)"
+      - "traefik.http.routers.documentation.rule=Host(`localhost`) && PathPrefix(`/docs`)"
       - "traefik.http.services.documentation.loadbalancer.server.port=5000"
-      - "traefik.http.routers.documentation.tls=true"
-      - "traefik.http.routers.documentation.tls.certresolver=le"    
+    
 
 networks:
-  web:
-  db:
+  local-web:
+  local-db:
 
 volumes:
-  kraken-postgres:
+  postgres16:
       external: true
-  pr3:
-      external: true
+

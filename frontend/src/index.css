@@ -28,3 +28,13 @@ code {
   width: 100%;
 }
 
+.centered-container {
+  text-align: center;
+}
+
+.responsive-image {
+  width: 80%;
+  max-width: 100%;
+  height: auto;
+}
+

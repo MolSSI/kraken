@@ -1,0 +1,30 @@
+[{
+    "number": "1,558",
+    "description": "DFT Calculated Ligands"
+  },
+
+  {
+    "number": "300,000+",
+    "description": "ML calculated Ligands"
+  },
+
+  {
+    "number": "576",
+    "description": "unique substituents"
+  },
+  
+  {
+    "number": "190",
+    "description": "DFT-level descriptors"
+  },
+
+  {
+    "number": "21,437",
+    "description": "unique conformers"
+  },
+
+  {
+    "number": "13.8",
+    "description": "average conformers per ligand"
+  }
+]

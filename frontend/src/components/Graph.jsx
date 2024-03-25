@@ -87,7 +87,7 @@ export default function Graph({ molData, componentArray, type, neighborSearch, c
         // molecule page.
         let og_url = window.location.href.split("/");
         let molecule_id = event.points[0].text.split(",")[1];
-        let url = og_url[0] + "//" + og_url[2] + "/molecule/" + molecule_id;
+        let url = og_url[0] + "//" + og_url[2] + `/${document.location.pathname.split('/')[1]}/molecule/` + molecule_id;
         if (molecule_id !== undefined) {
             window.open(url, "_blank", "noreferrer");
         }

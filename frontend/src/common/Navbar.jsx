@@ -1,4 +1,4 @@
-import * as React from 'react';
+import React, { useEffect, useState } from 'react';
 import PropTypes from 'prop-types';
 import AppBar from '@mui/material/AppBar';
 import Box from '@mui/material/Box';
@@ -18,13 +18,42 @@ import { NavLink, useLocation } from 'react-router-dom';
 
 import { Link } from 'react-router-dom';
 
-import OriginalKraken from './OriginalKraken.js'
-
 const drawerWidth = 240;
+const Badge = ({display}) => {
+  const displayStyle = {
+    display: display,
+    mr: 1,
+    fontSize: '60px', 
+    maxHeight: '70px',
+  };
 
+  return (
+    <Box component="img" src={`/${document.location.pathname.split('/')[1]}/brand/logo.svg`} sx={displayStyle} alt="logo" />
+  );
+};
+
+// Adapted from MUI documentation
+// Responsive App Bbar with Drawer - https://mui.com/material-ui/react-app-bar/#responsive-app-bar-with-drawer
 function DrawerAppBar(props) {
-  const { window, pages } = props;
+  const { navwindow, pages } = props;
   const [mobileOpen, setMobileOpen] = React.useState(false);
+  const [name, setName] = useState("");
+
+   useEffect(() => {
+    fetch(`/${document.location.pathname.split('/')[1]}/brand/names.json`)
+        .then(response => {
+            if (!response.ok) {
+                throw new Error('Network response was not ok');
+            }
+            return response.json();
+        })
+        .then(data => {
+          setName(data[0].name);
+        })
+        .catch(error => {
+            console.error('Error fetching stats:', error);
+        });
+}, []);
 
   const handleDrawerToggle = () => {
     setMobileOpen(prevState => !prevState);
@@ -41,7 +70,7 @@ function DrawerAppBar(props) {
   const drawer = (
     <Box onClick={handleDrawerToggle} sx={{ textAlign: 'center' }}>
       <Typography variant="h6" sx={{ my: 2 }}>
-        kraken
+        { name }
       </Typography>
       <Divider />
       <List>
@@ -60,25 +89,28 @@ function DrawerAppBar(props) {
           </ListItem>
         );
       })}
+      {/*}
       <ListItem key="documentation" disablePadding>
-        <Link to="/docs/" id="documentation" className="NavbarLink" reloadDocument style={{ textDecoration: 'none' }} >
+       <Link to={window.location.origin + '/docs'} id="documentation" className="NavbarLink" reloadDocument style={{ textDecoration: 'none' }} >
           <ListItemButton sx={{ textAlign: 'center' }}>
             <ListItemText primary="Documentation" />
           </ListItemButton>
         </Link>
+        
       </ListItem>
+      */}
     </List>
   </Box>
   );
 
-  const container = window !== undefined ? () => window().document.body : undefined;
+  const container = navwindow !== undefined ? () => navwindow().document.body : undefined;
 
   return (
     <Box sx={{ display: 'flex' }}>
       <CssBaseline />
       <AppBar component="nav">
         <Toolbar>
-        <OriginalKraken sx={{ display: { xs: 'none', md: 'flex' }, mr: 1, fontSize: '60px' }} />
+        <Badge display={{ xs: 'none', md: 'flex' }} />
           <IconButton
             color="inherit"
             aria-label="open drawer"
@@ -93,7 +125,7 @@ function DrawerAppBar(props) {
             component="div"
             sx={{ flexGrow: 1, display: { xs: 'none', sm: 'block' } }}
           >
-            kraken
+            { name }
           </Typography>
           <Box sx={{ display: { xs: 'none', sm: 'block' } }}>
             {Object.keys(pages).map(item => {
@@ -110,11 +142,13 @@ function DrawerAppBar(props) {
                 </NavLink>
               );
             })}
-            <Link to="/docs/" id="documentation" className="NavbarLink" reloadDocument style={{ textDecoration: 'none' }} >
+            {/*
+            <Link to={window.location.origin + '/docs'}  id="documentation" className="NavbarLink" reloadDocument style={{ textDecoration: 'none' }} >
               <Button sx={getButtonStyles('documentation')}>
                 <span style={{ textTransform: 'capitalize', fontSize: '16px' }}>Documentation</span>
               </Button>
             </Link>
+            */}
           </Box>
         </Toolbar>
       </AppBar>
@@ -141,7 +175,7 @@ function DrawerAppBar(props) {
 }
 
 DrawerAppBar.propTypes = {
-  window: PropTypes.func, // Injected by the documentation to work in an iframe. You won't need it on your project.
+  window: PropTypes.func, 
 };
 
 export default DrawerAppBar;

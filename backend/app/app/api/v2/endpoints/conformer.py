@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends
 from fastapi.responses import PlainTextResponse
-from typing import List
+from typing import List, Any
 
 from sqlalchemy import text
 from sqlalchemy.orm import Session
@@ -18,11 +18,19 @@ def get_conformer_and_format(conformer_id, format, db):
         return "Not implemented yet"
 
     try:
-        coords, elements = (
-            db.query(models.conformer.coords, models.conformer.elements)
-            .filter(models.conformer.conformer_id == conformer_id)
-            .one()
-        )
+        query = text("""
+            SELECT coords, elements
+            FROM conformer
+            WHERE conformer_id = :conformer_id
+        """)
+
+        stmt = query.bindparams(conformer_id=conformer_id)
+
+        result = db.execute(stmt).fetchone()
+
+        coords = result.coords
+        elements = result.elements
+        
     except:
         return None
 
@@ -38,7 +46,7 @@ def get_conformer_and_format(conformer_id, format, db):
 
 @router.get("/export/{format}/{conformer_id}", response_class=PlainTextResponse)
 def export_conformer(
-    conformer_id: int = 0,
+    conformer_id: int | str,
     format: str = "xyz",
     db: Session = Depends(deps.get_db),
 ):
@@ -51,11 +59,29 @@ def format_for_ngl(
     db: Session = Depends(deps.get_db),
 ):
     conformer_id, format = filename.split(".")
-    return get_conformer_and_format(int(conformer_id), format, db)
+    return get_conformer_and_format(conformer_id, format, db)
 
+@router.get("/data/{conformer_id}", response_model=Any)
+def get_conformer_data(conformer_id: int | str, db: Session = Depends(deps.get_db)):
+
+    query = text(f"""
+        SELECT *
+        FROM conformer
+        WHERE conformer_id = :conformer_id
+    """)
+
+    stmt = query.bindparams(conformer_id=conformer_id)
+
+    result = db.execute(stmt).fetchone()
+
+    # Hacky way to get each row as a dictionary.
+    # do this to generalize for different data sets - column names may vary.
+    data = { k:v for k, v in result._asdict().items() if k != "coords" and k != "elements" }
+
+    return data
 
 @router.get("/others_id/{conformer_id}")
-def get_other_conformers_id(conformer_id: int = 0, db: Session = Depends(deps.get_db)):
+def get_other_conformers_id(conformer_id: int | str, db: Session = Depends(deps.get_db)):
     sql = text(
         (
             "select conformer_id from conformer "

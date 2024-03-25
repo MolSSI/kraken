@@ -7,11 +7,21 @@ import { useParams } from "react-router-dom";
 
 import Button from '@mui/material/Button';
 
+import DropDownButton from '../components/DataDownloadButton';
+
 import Graph from '../components/Graph'
 
-import { retrieveAllSVGs, dynamicGrid, extractIdsFromResults, downloadMoleculeData } from '../common/MoleculeUtils';
+import { retrieveAllSVGs, dynamicGrid, extractIdsFromResults } from '../common/MoleculeUtils';
 
-
+async function fetchInitialMoleculeId() {
+  const response = await fetch(`/api/${document.location.pathname.split('/')[1]}/molecules/first_id`);
+  if (!response.ok) {
+      throw new Error('Network response was not ok');
+  }
+  const result = await response.json();
+  const initial_id = result["first_molecule_id"];
+  return initial_id;
+}
 
 
 async function NeighborSearch(molecule_id, type="pca", components="1,2,3,4", limit=48, skip=0, signal) {
@@ -27,7 +37,7 @@ async function NeighborSearch(molecule_id, type="pca", components="1,2,3,4", lim
    */
     let encoded = encodeURIComponent(components);
 
-    const response =  await fetch(`/api/molecules/${molecule_id}/neighbors/?type=${type}&components=${encoded}&skip=${skip}&limit=${limit}`, {signal: signal})
+    const response =  await fetch(`/api/${document.location.pathname.split('/')[1]}/molecules/${molecule_id}/neighbors/?type=${type}&components=${encoded}&skip=${skip}&limit=${limit}`, {signal: signal})
 
     if (!response.ok) {
         throw new Error('Invalid Molecule Id')
@@ -48,7 +58,7 @@ export default function NeighborSearchHook () {
     const params = useParams();
     const interval = 15;
     
-    const [ moleculeid, setMoleculeID ] = useState(params.molid || 1);
+    const [ moleculeid, setMoleculeID ] = useState();
     const [ skip, setSkip ] = useState(0);
     const [ validMolecule, setValidMolecule ] = useState(true);
     const [ svg_results, setSVGResults ] = useState([])
@@ -60,6 +70,43 @@ export default function NeighborSearchHook () {
     const [ searchToggle, setSearchToggle ] = useState(true);
     const [ isMobile, setIsMobile ] = useState(window.innerWidth < 768);
     const [ moleculeIDs, setMoleculeIDs ] = useState("");
+    const [ availableDataTypes, setAvailableDataTypes ] = useState([]);
+
+    const reverseMapping = {
+      "ml_data": "ML Data",
+      "dft_data": "DFT Data",
+      "xtb_data": "xTB Data",
+      "xtb_ni_data": "xTB_Ni Data"
+  };
+
+  useEffect(() => {
+    const init = async () => {
+        try {
+            // Check if there's a molid in the URL params
+            if (params.molid) {
+                setMoleculeID(params.molid);
+            } else {
+                // Fetch the initial molecule ID from the endpoint
+                const initialId = await fetchInitialMoleculeId();
+                setMoleculeID(initialId);
+            }
+        } catch (error) {
+            console.error('Failed to initialize molecule ID:', error);
+            // Handle error (e.g., set state to show an error message)
+        }
+    };
+
+    init();
+    }, [params.molid]); // Depend on params.molid so this effect re-runs if the URL parameter changes
+  
+    useEffect(() => {
+      fetch(`/api/${document.location.pathname.split('/')[1]}/molecules/data_types`)
+      .then(response => response.json())
+      .then(data => {
+        const translatedDataTypes = data["available_types"].map(key => reverseMapping[key] || key);
+        setAvailableDataTypes(translatedDataTypes);
+      });
+  }, []);
 
     // Extract the molecule ids from the results
     useEffect(() => {
@@ -111,7 +158,7 @@ export default function NeighborSearchHook () {
        * @param {AbortSignal} signal Abortsignal object.
        */
         const fetchData = async () => {
-            const molecule_data = await NeighborSearch(moleculeid, "pca", "1,2,3,4", interval, skip, signal);
+            const molecule_data = await NeighborSearch(moleculeid, "pca", "1,2,3", interval, skip, signal);
             const svg_data = await retrieveAllSVGs(molecule_data, signal);
 
             return [ molecule_data, svg_data ]
@@ -170,14 +217,14 @@ export default function NeighborSearchHook () {
       }
     },
       // eslint-disable-next-line react-hooks/exhaustive-deps
-      [ searchToggle ]
+      [ searchToggle, moleculeid ]
     ); 
 
     return (
         <Container maxWidth="lg">
         <Typography variant="h2" textAlign="center">Neighbor Search</Typography>
         <Box sx={{pb:1}}>
-          <Typography textAlign="center">Neighbors are identified by Euclidian distance in 4 principal component space.</Typography>
+          <Typography textAlign="center">Neighbors are identified by Euclidian distance in 3 principal component space.</Typography>
         </Box>
 
         <Box display="flex" justifyContent="center" pt={2}>
@@ -185,7 +232,8 @@ export default function NeighborSearchHook () {
                   style = {{width: 350}}
                   sx={{ m: 0.5}}
                   id="search-outline" 
-                  label="Enter a Molecule ID to Search" 
+                  label="" 
+                  helperText="Enter a molecule ID to search for neighbors."
                   variant="outlined"
                   value= {moleculeid} 
                   onKeyDown = { (e) => _handleKeyDown(e) }
@@ -215,12 +263,7 @@ export default function NeighborSearchHook () {
                           Load More
                         </span>
                       </Button>
-                      <Button variant="contained" sx={{ my: 3, ml: 2 }} onClick={() => downloadMoleculeData(moleculeIDs, "pca_neighbors")}>
-                        <span style={{ textTransform: 'capitalize', fontSize: '16px' }}>
-                          Download Search Results
-                        </span>
-                      </Button>
-
+                      <DropDownButton molecule_ids={moleculeIDs} dataTypes={availableDataTypes} />
                   </>
                 }
                 </Box>

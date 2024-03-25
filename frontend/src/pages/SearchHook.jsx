@@ -12,11 +12,13 @@ import FullScreenDialog from '../components/KetcherPopup';
 
 import { substructureSearch, retrieveAllSVGs, dynamicGrid, extractIdsFromResults, downloadMoleculeData } from '../common/MoleculeUtils';
 
+import DropDownButton from '../components/DataDownloadButton';
+
 export default function SearchHook () {
 
     const interval = 15;
 
-    const [ searchString, setSearch ] = useState('PC=C');
+    const [ searchString, setSearch ] = useState('C=C');
     const [ skip, setSkip ] = useState(0);
     const [ results, setResults ] = useState([]);
     const [ validSmiles, setValidSmiles ] = useState(true);
@@ -33,6 +35,24 @@ export default function SearchHook () {
     const [ fromKetcher, setFromKetcher ] = useState(false);
     const [ updatedParameters, setUpdatedParameters ] = useState(false);
     const [ moleculeIDs, setMoleculeIDs ] = useState("");
+    const [ availableDataTypes, setAvailableDataTypes ] = useState([]);
+
+    const reverseMapping = {
+      "ml_data": "ML Data",
+      "dft_data": "DFT Data",
+      "xtb_data": "xTB Data",
+      "xtb_ni_data": "xTB_Ni Data"
+  };
+  
+  
+    useEffect(() => {
+      fetch(`/api/${document.location.pathname.split('/')[1]}/molecules/data_types`)
+      .then(response => response.json())
+      .then(data => {
+        const translatedDataTypes = data["available_types"].map(key => reverseMapping[key] || key);
+        setAvailableDataTypes(translatedDataTypes);
+      });
+  }, []);
 
     // Extract the molecule ids from the results
     useEffect(() => {
@@ -220,11 +240,7 @@ export default function SearchHook () {
                         Load More
                       </span>
                       </Button>
-                      <Button variant="contained" sx={{ my: 3, ml: 2 }} onClick={() => downloadMoleculeData(moleculeIDs)}>
-                      <span style={{ textTransform: 'capitalize', fontSize: '16px' }}>
-                        Download Search Results
-                      </span>
-                      </Button>
+                      <DropDownButton molecule_ids={moleculeIDs} dataTypes={availableDataTypes} />
                     </>
                   }          
       </Box>
@@ -247,11 +263,7 @@ export default function SearchHook () {
                         Load More
                       </span>
                       </Button>
-                      <Button variant="contained" sx={{ my: 3, ml: 2 }} onClick={() => downloadMoleculeData(moleculeIDs)}>
-                      <span style={{ textTransform: 'capitalize', fontSize: '16px' }}>
-                        Download Search Results
-                      </span>
-                      </Button>
+                      <DropDownButton molecule_ids={moleculeIDs} dataTypes={availableDataTypes} />
                     </>
                   }          
                 </Box>

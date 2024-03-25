@@ -12,13 +12,49 @@ import MoleculeDataTable from "../components/MoleculeDataTable";
 
 import { neighborPage } from "../common/MoleculeUtils";
 
+const MoleculeCard = ({ molData, identifierData }) => {
+   // Merging molData and identifierData objects and removing 'conformers_id'
+  const combinedData = {
+   ...molData,
+   ...identifierData,
+ };
+ delete combinedData.conformers_id; // Removing the 'conformers_id' key
+
+ // Function to format keys to title case
+ const toTitleCase = (str) => {
+   return str.replace(/_/g, ' ').replace(/\w\S*/g, (txt) => {
+     return txt.charAt(0).toUpperCase() + txt.substr(1).toLowerCase();
+   });
+ };
+
+ // Conditionally formatting values (e.g., for molecular_weight)
+ const formattedValue = (key, value) => {
+   if (key === 'molecular_weight') {
+     return value.toFixed(2);
+   }
+   return value;
+ };
+
+ return (
+   <div>
+     {Object.entries(combinedData)
+       .filter(([key, value]) => value != null && value !== '') // Filtering out null or empty values
+       .map(([key, value]) => (
+       <Typography key={key} align='left'>
+         <strong>{toTitleCase(key)}:</strong> {formattedValue(key, value)}
+       </Typography>
+     ))}
+   </div>
+ );
+};
+
 async function molecule(molecule_id, signal) {
    /**
     * Requests general umap or pca data from the backend.
     * @param {number} molecule_id Id of the molecule to search on.
     * @param {AbortSignal} signal Abortsignal object.
     */
-      const response =  await fetch(`/api/molecules/${molecule_id}`, {signal: signal})
+      const response =  await fetch(`/api/${document.location.pathname.split('/')[1]}/molecules/${molecule_id}`, {signal: signal})
    
       if (!response.ok) {
          throw new Error('Invalid Molecule Id')
@@ -41,7 +77,7 @@ async function dimensionality(molecule_id, type, components, signal, limit=10) {
     */
       let encoded = encodeURIComponent(components);
 
-      const response =  await fetch(`/api/molecules/${molecule_id}/neighbors/?type=${type}&components=${encoded}&skip=0&limit=${limit}`, {signal: signal})
+      const response =  await fetch(`/api/${document.location.pathname.split('/')[1]}/molecules/${molecule_id}/neighbors/?type=${type}&components=${encoded}&skip=0&limit=${limit}`, {signal: signal})
    
       if (!response.ok) {
          throw new Error('Invalid Molecule Id')
@@ -61,7 +97,7 @@ async function identifiers(smiles, signal) {
     */
       let encoded = encodeURIComponent(smiles);
 
-      const response =  await fetch(`/api/molecules/identifiers/?smiles=${encoded}`, {signal: signal})
+      const response =  await fetch(`/api/${document.location.pathname.split('/')[1]}/molecules/identifiers/?smiles=${encoded}`, {signal: signal})
    
       if (!response.ok) {
          throw new Error('Invalid Molecule Smiles')
@@ -84,6 +120,7 @@ export default function MoleculeInfo() {
    const [ svg, setSvg ] = useState({});
    const [ allConformers, setAllConformers ] = useState([]);
    const [ conformer, setConformer ] = useState("");
+   const [ conformerCluster, setConformerCluster ] = useState([]);
    const [ width, setWidth ] = useState(window.innerWidth);
 
    useEffect(() => {
@@ -121,7 +158,7 @@ export default function MoleculeInfo() {
          const fetchData = async () => {
             const molecule_data = await molecule(molid, signal);
             const umap_neighbor_data = await dimensionality(molid, "umap", ["1", "2"], signal);
-            const pca_neighbor_data = await dimensionality(molid, "pca", ["1", "2", "3", "4"], signal);
+            const pca_neighbor_data = await dimensionality(molid, "pca", ["1", "2", "3"], signal);
             const svg_data = await retrieveSVG(molecule_data.smiles, signal);
             const identifier_data = await identifiers(molecule_data.smiles, signal);
             return [ molecule_data, umap_neighbor_data, pca_neighbor_data, svg_data, identifier_data ]
@@ -167,6 +204,22 @@ export default function MoleculeInfo() {
       [ params ]
    );
 
+   useEffect(() => {
+      const controller = new AbortController();
+      const signal = controller.signal;
+      fetch(`/api/${document.location.pathname.split('/')[1]}/conformers/data/` + conformer, {signal: signal})
+      .then(response => response.json())
+      .then(data => {
+         if (data.cluster) { 
+             setConformerCluster(data.cluster);
+         } else {
+             setConformerCluster(false); 
+         }
+      })
+      
+   }, [conformer]);
+  
+
    return (
       <Container maxWidth="xl">
          <Grid container alignItems="center" justifyContent="center" spacing={2}>
@@ -182,11 +235,7 @@ export default function MoleculeInfo() {
                   {Object.keys(molData).length > 0 && 
                         <Card>
                            <CardContent>
-                           <Typography align='left'> <strong>SMILES:</strong> {molData.smiles} </Typography>
-                           <Typography align='left'> <strong>kraken Ligand ID:</strong> {molData.molecule_id} </Typography>
-                           <Typography align='left'> <strong>InChI:</strong> {identifierData.InChI} </Typography>
-                           <Typography align='left'> <strong>InChIKey:</strong> {identifierData.InChIKey} </Typography>
-                           <Typography align='left'> <strong>Molecular Weight:</strong> {molData.molecular_weight.toFixed(2)} </Typography>
+                            <MoleculeCard molData={molData} identifierData={identifierData} />
                            <Box display="flex" justifyContent="center">
                               <Button variant="contained" sx={{ m: 0.5 }} onClick={() => neighborPage(params.molid)}>View Molecule Neighbors</Button>
                            </Box>
@@ -213,9 +262,12 @@ export default function MoleculeInfo() {
                         ))}
                      </Select>
                   </FormControl>
+                  <Typography variant="caption" align="center" style={{ visibility: conformerCluster ? 'visible' : 'hidden' }}>
+                     This conformer ensemble was clustered.
+                  </Typography>
                      <Box display="flex" justifyContent="center" alignItems="center">
                      <NGLStage width="700px" height="600px" >
-                        <Component path={"/api/conformers/export/"+ conformer + ".sdf"} />
+                        <Component path={`/api/${document.location.pathname.split('/')[1]}/conformers/export/`+ conformer + ".sdf"} />
                      </NGLStage>
                   </Box>
                </Container>

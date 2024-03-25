@@ -11,6 +11,6 @@ class Atom(BaseModel):
 
 
 class Conformer(BaseModel):
-    id: int
+    id: int | str
     coords: List[Atom]
     property: float

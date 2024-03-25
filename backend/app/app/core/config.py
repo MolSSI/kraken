@@ -5,7 +5,7 @@ from typing import Any, Optional, Dict
 from urllib.parse import quote
 
 class Settings(BaseSettings):
-    PROJECT_NAME: str = 'Phosphines'
+    PROJECT_NAME: str = 'Descriptor Libraries API'
 
     POSTGRES_SERVER: str
     POSTGRES_USER: str

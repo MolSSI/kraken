@@ -1,59 +1,58 @@
 import React, { useEffect, useState } from 'react';
-import { Link } from "react-router-dom";
 
-import { Container, Typography, Box, Grid } from "@mui/material";
+import { Typography, Box, Grid } from "@mui/material";
 import { useTheme } from '@mui/material/styles';
 
-import OriginalKraken from '../common/OriginalKraken';
 import Graph from "../components/Graph";
+import Graphv2 from '../components/Graphv2';  
 
 import SearchIcon from '@mui/icons-material/Search';
 import BubbleChartIcon from '@mui/icons-material/BubbleChart';
-//import DownloadIcon from '@mui/icons-material/Download';
-import AutoStoriesIcon from '@mui/icons-material/AutoStories';
+import DownloadIcon from '@mui/icons-material/Download';
+//import AutoStoriesIcon from '@mui/icons-material/AutoStories';
 import InfoIcon from '@mui/icons-material/Info';
-import StatCard from '../components/SummaryCard';
+import StatsGrid from '../components/StatsGrid';
 import IconLink from '../components/IconLink';
 
-const stats = [
-  {
-    "number": "1,558",
-    "description": "DFT Calculated Ligands"
-  },
+import CheckFileAndDownloadIcon from '../components/FileDownload';
 
-  {
-    "number": "300,000+",
-    "description": "ML calculated Ligands"
-  },
+import purify from 'dompurify';
 
-  {
-    "number": "576",
-    "description": "unique substituents"
-  },
-  
-  {
-    "number": "190",
-    "description": "DFT-level descriptors"
-  },
+const Badge = ({ isMobile }) => {
+  const displayStyle = {
+    maxWidth: isMobile ? '120px' : '240px', // This sets the maximum width of the image
+    height: '15vh' // Set the height of the image to 20% of the viewport height (box is 35% of vh)
+  };
 
-  {
-    "number": "21,437",
-    "description": "unique conformers"
-  },
+  return (
+    <img src={`/${document.location.pathname.split('/')[1]}/brand/logo.svg`} style={displayStyle} alt="logo" />
+  );
+};
 
-  {
-    "number": "13.8",
-    "description": "average conformers per ligand"
-  }, 
-  
-]
 
 function Home() {
    const [ molData, setMolData ] = useState([]);
-   const [ components, setComponents ] = useState(["1", "2"]);
-   const [ type, setType ] = useState("umap");
    const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
+   const [name, setName] = useState("");
+   const [tagline, setTagline] = useState("");
    const theme = useTheme();
+
+   useEffect(() => {
+    fetch(`/${document.location.pathname.split('/')[1]}/brand/names.json`)
+        .then(response => {
+            if (!response.ok) {
+                throw new Error('Network response was not ok');
+            }
+            return response.json();
+        })
+        .then(data => {
+          setName(data[0].name);
+          setTagline(data[0].tagline);
+        })
+        .catch(error => {
+            console.error('Error fetching stats:', error);
+        });
+}, []);
 
    useEffect(() => {
     function checkMobile() {
@@ -70,17 +69,14 @@ function Home() {
   }, []); // Empty array means this effect runs once on mount and cleanup on unmount
 
 
-   async function umap(type, components, limit=1000) {
+   async function umap() {
       /**
        * Requests general umap data from the backend.
-       * @param {string} type Type of dimensionality reduction. Can be one of PCA or UMAP.
-       * @param {string} components String of comma separated integers.
-       * @param {number} limit Limit of the search.
        * @return {json}  The response json.
        */
-         let encoded = encodeURIComponent(components);
+         let encoded = encodeURIComponent("1,2");
 
-         const response =  await fetch(`/api/molecules/dimensions/?type=${type}&components=${encoded}&limit=${limit}`)
+         const response =  await fetch(`/api/${document.location.pathname.split('/')[1]}/molecules/dimensions/?type=umap&components=${encoded}&limit=10000`)
       
          if (!response.ok) {
             throw new Error('Invalid Molecule Id')
@@ -97,7 +93,7 @@ function Home() {
        * 
        */
          const fetchData = async () => {
-            const molecule_data = await umap(type, components);
+            const molecule_data = await umap();
             return molecule_data
          }
 
@@ -111,7 +107,7 @@ function Home() {
       }
    useEffect(() => {
       loadData()
-   }, [type]);
+   }, []);
 
   return (
   <>
@@ -129,16 +125,13 @@ function Home() {
             flexDirection: isMobile ? 'column' : 'row',
         }}
     >
-        <OriginalKraken sx={{ color: 'white', fontSize: isMobile ? '120px' : '160px' }} />
+        <Badge isMobile={isMobile} />
         <Typography variant={ isMobile ? "h4" :"h2"} color="white">
-            KRAKEN
+            { name }
         </Typography>
     </Box>
       {
-        <Typography variant={ isMobile ? "subtitle1" :"h5"} color="white" textAlign="center">
-          <b>K</b>olossal vi<b>R</b>tual d<b>A</b>tabase
-                  for mole<b>K</b>ular d<b>E</b>scriptors of orga<b>N</b>ophosphorus
-                  ligands.
+        <Typography variant={ isMobile ? "subtitle1" :"h5"} color="white" textAlign="center" dangerouslySetInnerHTML={{ __html:purify.sanitize(tagline) }} >
         </Typography>
       }
        <Grid container alignItems="center" justifyContent="center" spacing={3} sx={{ mb: 1 }}>
@@ -151,24 +144,15 @@ function Home() {
           <Grid item>
             <IconLink IconElement={InfoIcon} text="Library Details" link="/library_details"></IconLink>
           </Grid>
-          {/* Hide until we're ready to add
-            <Grid item>
-              <IconLink IconElement={DownloadIcon} text="Download" link="/download"></IconLink>
-            </Grid> 
-            */}
+          <CheckFileAndDownloadIcon />
+        {/* Hide until we're ready to add
           <Grid item>
             <IconLink IconElement={AutoStoriesIcon} text="Documentation" link="/docs" reloadDocument></IconLink>
           </Grid>
+          */}
         </Grid>
      </Box>
-
-    <Container maxWidth="xl" sx={{ display: "flex", flexDirection: "column", alignItems: "center"  }}>
-      <Grid container spacing={2} sx={{ mt: 3 }}>
-            {stats.map((stat, index) => (
-              <StatCard key={index} number={stat.number} caption={stat.description} size={150} />
-            ))}
-      </Grid>
-      </Container>
+     <StatsGrid />
       <Box sx={{ 
         width: '100%',
         height: '80vh', 
@@ -176,7 +160,7 @@ function Home() {
         alignItems: 'center',  
         justifyContent: 'center', 
       }}>
-  {!isMobile && <Graph molData={molData} componentArray={components} type={type} neighborSearch={false} containerStyle={{ width: '100%', height: '90%' }}></Graph>}
+  {!isMobile && <Graphv2 molData={molData} componentArray={["1", "2"]} neighborSearch={false} containerStyle={{ width: '100%', height: '90%' }}></Graphv2>}
 </Box>
     </>
   );

@@ -55,7 +55,7 @@ function App() {
     <>
     <Box sx={{ display: 'flex', flexDirection: 'column'}}>
       <ThemeProvider theme={theme}>
-        <Router>
+        <Router basename={`/${document.location.pathname.split('/')[1]}`}>
             <Content />
         </Router>
       </ThemeProvider>
